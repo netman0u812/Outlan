@@ -1,0 +1,696 @@
+Basic user assumption:
+
+
+“Partners require bespoke protocol/service patterns (SFTP, API, VDI,
+weird vendor stacks) and we need per-tenant proxy instances.”
+
+
+What we need to implement,a Service Plane
+
+Service Plane:
+
+How the application is exposed
+
+Proxy behavior
+
+Header rewrites
+
+mTLS termination strategy
+
+Per-tenant custom routing
+
+Payload offload inspection chaining
+
+Service catalog-driven provisioning
+
+
+A horizontally scalable per-partner tenancy platform with per-tenant custom proxy connections.
+This is a service plane problem.
+
+- Horizontally scaling per-partner tenancy
+
+- Service catalog driven proxy provisioning
+
+- Custom L7 behaviors per tenant
+
+- Controlled inspection offload chains
+
+
+
+
+-----------------------
+
+
+What ZScaler Provides:
+
+ZPA solves an access plane problem.
+
+Access Plane:
+
+Who can reach which application
+
+Based on identity, posture, policy
+
+No network exposure
+
+Brokered connectivity
+
+ZPA is:
+
+A policy-based access broker
+
+Built for user-to-application access
+
+Identity-driven (SAML / IdP groups)
+
+Application-segment scoped (FQDN/IP + port)
+
+Connector-mediated (inside-out connectivity)
+
+It does: User → ZPA cloud → App Connector → App
+
+
+It does not:
+
+Create tenant-specific proxy planes
+
+Mint bespoke per-tenant reverse proxy stacks
+
+Provide per-tenant L7 transformation layers
+
+Function as a horizontally scaling multi-tenant proxy fabric
+
+Replace an API gateway / reverse proxy architecture
+
+-------  
+
+If your requirement is:
+
+1,000 partners
+
+Each with:
+
+Custom service profile definitions
+
+Per-tenant proxy behavior
+
+DNS rewrite rules
+
+Payload offload routing decisions
+
+Custom enforcement stacks
+
+ZPA cannot generate that as a platform capability.
+
+You would still need:
+
+An internal proxy fabric
+
+Or a multi-tenant gateway layer
+
+Or an API gateway platform
+
+ZPA would simply sit in front of it as identity enforcement.
+
+
+
+
+----------------------
+
+…then a pure edge-broker feels structurally wrong in a flat enterprise
+network, because you don’t have the natural boundaries (per-app
+enclaves, per-domain routing islands, per-segment egress points) that
+make “local brokering” clean.
+
+But there’s a subtle distinction that matters:
+
+“Broker” can mean two different things 1) Broker as policy decision
+point
+
+Authentication, identity checks, posture checks
+
+“Are you allowed to reach app X?”
+
+This can live “in the cloud” without breaking locality.
+
+2) Broker as policy enforcement point / service plane
+
+mTLS termination
+
+L7 controls (headers/path/rate)
+
+inspection / payload handling
+
+DNS rewriting / name-based steering
+
+explicit proxy chaining
+
+This is what you mean by local. And you’re right: in a flat network, you
+can’t magically make this “local per app” unless you create structural
+boundaries.
+
+
+What you can do in a flat enterprise network (three realistic paths)
+Path A — Accept edge brokering, but create app enclaves
+
+This is the structural fix:
+
+carve the flat network into app islands (VRF/VLAN/security zones/cloud VPCs)
+
+deploy the enforcement plane (proxy/inspection) inside each island
+
+now the access broker becomes “local” again because the network has locality
+
+This is the cleanest way to reconcile your principle with reality.
+
+
+
+Path B — Keep the network flat, but introduce a service plane overlay
+
+This is basically RC1 logic:
+
+“tenancy” is not the network; it’s the proxy + DNS + PKI service plane
+
+you deliberately force all third-party traffic through that plane
+
+locality is “local to the service plane” rather than “local to the app”
+
+This works even when the enterprise is flat, because you are creating an artificial boundary.
+
+
+
+Path C — Hybrid: Use an access broker for “who”, but keep bespoke service termination local
+
+This is often the most practical compromise:
+
+Access broker handles identity and session authorization
+
+Your proxy/gateway fabric (RC1-style) is what actually terminates and enforces per-tenant service profiles
+
+The broker never tries to be the service plane
+
+This matches your intuition best: broker is not the proxy factory.
+
+
+
+
+The key takeaway
+
+You’re highlighting a structural truth:
+
+In a flat enterprise network, “local-to-workload brokering” is not a property you can buy.
+
+It’s a property you have to create by introducing boundaries:
+
+app enclaves, or
+
+a service plane overlay, or
+
+both.
+
+If you don’t change structure, the broker will always feel “non-local” because there is nowhere for “local” to attach to.
+
+
+
+The Four Connection Models on the Table
+
+Each vendor is fundamentally in a different category:
+
+Vendor	Connection Model Category
+Zscaler	Cloud Access Broker + Proxy Fabric
+Cloudflare	Global Edge Service Mesh (Proxy + Network-as-a-Service)
+Cisco	Network Transport + Segmentation Infrastructure
+F5	Application Delivery + Proxy Enforcement Layer
+
+
+1. Zscaler — Access Broker + Cloud Proxy Fabric
+Core Model:
+
+“Connectivity is never direct. Access is brokered through Zscaler’s cloud.”
+
+Traffic model:
+
+User → Zscaler Enforcement Cloud → App Connector → Application
+Key Characteristics:
+
+Connection is identity-mediated
+
+Network is abstracted away
+
+Sessions are built dynamically per policy
+
+Enforcement is inside the Zscaler cloud
+
+App side is reached through outbound-only connectors
+
+What you are buying:
+
+A cloud-based security enforcement fabric
+
+Not routing, not tenancy, not per-app proxies you own
+
+Best description:
+
+“ZTNA broker + inline inspection proxy service.”
+
+2. Cloudflare — Edge Service Mesh / Anycast Network Fabric
+Core Model:
+
+“Your applications live behind Cloudflare’s edge. Connectivity happens at the edge.”
+
+Traffic model:
+
+User → Cloudflare Edge POP → Cloudflare Tunnel / Network → Application
+Key Characteristics:
+
+Connection terminates at the nearest Cloudflare POP
+
+Cloudflare becomes the “front door” for everything
+
+Strong DNS-native control plane
+
+Works as both:
+
+proxy fabric
+
+network transport overlay
+
+What you are buying:
+
+A global edge delivery + security mesh
+
+Closer to a “private Internet layer”
+
+Best description:
+
+“Edge-hosted application connectivity fabric.”
+
+3. Cisco — Transport Network + Segmentation Infrastructure
+Core Model:
+
+“We provide secure transport and segmentation. You own the enforcement.”
+
+Traffic model:
+
+Site/Partner → IPsec/BGP/MPLS → Cisco Network Devices → Enterprise Network
+Key Characteristics:
+
+Connection is built with:
+
+tunnels
+
+routing adjacencies
+
+VRFs
+
+firewall boundaries
+
+Cisco gives you the plumbing
+
+You still build the service plane
+
+What you are buying:
+
+Network infrastructure for connectivity
+
+Not application mediation
+
+Best description:
+
+“Secure routed transport + segmentation toolkit.”
+
+4. F5 — Application Proxy + Delivery Enforcement Plane
+Core Model:
+
+“Connections terminate on an application proxy that you control.”
+
+Traffic model:
+
+User/Partner → F5 Proxy (ADC) → Application
+Key Characteristics:
+
+Termination is explicit
+
+F5 is a proxy, not a broker
+
+Strong L7 controls:
+
+mTLS
+
+WAF
+
+API gateway behavior
+
+traffic inspection
+
+What you are buying:
+
+An application enforcement gateway
+
+Not a global access fabric
+
+Best description:
+
+“Enterprise-owned application proxy + inspection tier.”
+
+
+
+The Real Truth: These Vendors Sell Different “Connection Primitives”
+Zscaler sells:
+
+Session brokering
+
+Cloudflare sells:
+
+Edge network overlay
+
+Cisco sells:
+
+Transport + routing adjacency
+
+F5 sells:
+
+Proxy termination + application enforcement
+
+
+
+The Key Next Question
+
+Do you want the enterprise connection model to be:
+
+Brokered sessions (identity-first)
+
+Edge service mesh (network overlay)
+
+Routed transport (tunnels + VRFs)
+
+Proxy enforcement plane (service catalog)
+
+
+
+
+One Crisp Closing Statement (Exec-ready)
+
+Cisco sells secure transport.
+Cloudflare sells an edge network.
+Zscaler sells brokered access through a cloud proxy.
+F5 sells the proxy enforcement plane itself — which is the closest match to RC1’s per-tenant service fabric.
+
+
+
+1. Zscaler’s Model: Brokerage = Identity ACL + Session Mediation
+
+Zscaler (ZPA) is fundamentally:
+
+Identity-based access brokerage
+
+Meaning:
+
+“User X may reach App Y”
+
+Connectivity is granted dynamically
+
+No network exposure
+
+Policy is mostly an ACL decision
+
+Traffic looks like:
+
+User → Zscaler Broker → App Connector → App
+
+The broker’s job is:
+
+✅ Authenticate
+✅ Authorize
+✅ Mediate session establishment
+✅ Log access
+
+But critically:
+
+The application is assumed to already behave correctly.
+
+ZPA is not designed to compensate for:
+
+legacy auth gaps
+
+protocol weaknesses
+
+missing controls
+
+broken application-layer governance
+
+It is primarily:
+
+Reachability control, not service enhancement.
+
+2. F5’s Model: Proxy Enforcement = Service Augmentation Layer
+
+F5 is not a broker.
+
+F5 is an:
+
+Application delivery and enforcement plane
+
+Traffic looks like:
+
+User → F5 Proxy → Enhanced Service → Application
+
+F5 terminates the connection.
+
+And once it terminates, it can transform the service.
+
+That is the killer difference.
+
+3. The Key Distinction: “Can You Fix the App?”
+Zscaler: No — it only brokers access
+
+Zscaler says:
+
+“We’ll let you reach the app”
+
+“We’ll inspect traffic”
+
+“We’ll enforce identity policy”
+
+But the app is still the app.
+
+If the app has limitations:
+
+no mTLS support
+
+weak session controls
+
+no header awareness
+
+no API governance
+
+no modern auth
+
+Zscaler does not become an application enhancement tier.
+
+F5: Yes — the proxy becomes the application’s missing capabilities
+
+F5’s entire value is:
+
+“Your application doesn’t need to be modern.
+The proxy makes it modern.”
+
+Examples:
+
+Identity Enhancement
+
+App doesn’t support SAML/OIDC?
+→ F5 injects it.
+
+TLS/mTLS Enhancement
+
+App can’t do mTLS?
+→ F5 terminates mTLS and forwards internally.
+
+API Governance
+
+App exposes ugly legacy endpoints?
+→ F5 rewrites paths, enforces schemas, rate limits.
+
+Security Controls
+
+App has no WAF?
+→ F5 provides WAF inline.
+
+Tenant-Specific Behaviors
+
+Partner A needs special headers?
+
+Partner B needs different routing?
+→ F5 can do per-tenant service policy.
+
+This is not brokerage.
+
+This is:
+
+Service mediation and augmentation.
+4. Why This Matters for Enterprise Reality
+
+Enterprise internal applications are not perfect SaaS apps.
+
+They are:
+
+legacy
+
+inconsistent
+
+missing identity controls
+
+missing observability
+
+missing segmentation
+
+brittle protocols (SFTP, VDI, SOAP)
+
+So the real problem is not:
+
+“Can I control who reaches it?”
+
+The real problem is:
+
+“Can I safely expose this broken thing to an untrusted partner?”
+
+That requires:
+
+protocol normalization
+
+security augmentation
+
+bespoke enforcement
+
+That is F5’s world.
+
+Not ZPA’s.
+
+
+7. The Executive-Level Truth
+
+You can say it like this:
+
+Zscaler controls access to applications.
+F5 becomes part of the application delivery architecture.
+
+Or even sharper:
+
+Zscaler answers “Who can connect?”
+F5 answers “How should this service behave when they do?”
+
+That’s the difference.
+
+
+
+1️⃣ What ZTNA (Including Zscaler) Assumes
+
+ZTNA systems assume:
+
+Applications already have sane session handling
+
+Apps enforce authorization correctly
+
+Apps are hardened against L7 abuse
+
+Apps can tolerate direct client interaction (once authenticated)
+
+APIs follow modern patterns
+
+Legacy protocols are limited or wrapped
+
+There is no need to mutate application behavior at the proxy
+
+ZTNA solves:
+
+Who can reach what
+
+Under what identity
+
+Under what device posture
+
+With what inspection profile
+
+It does not solve:
+
+Broken application-layer semantics
+
+Missing protocol controls
+
+Header normalization
+
+Path governance
+
+Service augmentation
+
+It brokers access.
+
+It does not repair legacy architecture.
+
+2️⃣ Why That Assumption Breaks in Enterprise Reality
+
+Enterprise internal applications are rarely:
+
+Modern
+
+Cleanly segmented
+
+Properly authenticated
+
+Designed for external exposure
+
+Built with multi-tenant awareness
+
+They are often:
+
+Stateful
+
+Legacy-auth
+
+Hard-coded for internal DNS
+
+Sensitive to header changes
+
+Missing rate limits
+
+Missing API governance
+
+Using brittle protocols (SFTP, RDP, VDI, SOAP, proprietary)
+
+So when you expose them via ZTNA:
+
+You are giving controlled reachability to a brittle thing.
+
+ZTNA is comfortable when the app is SaaS-like.
+
+It is uncomfortable when the app is 2009-era middleware.
+
+3️⃣ The Structural Gap
+
+ZTNA model:
+
+User → Broker → App
+
+Service-plane model (F5/RC1):
+
+User → Proxy → Augmented Service → App
+
+The second model inserts:
+
+protocol mediation
+
+behavioral correction
+
+normalization
+
+security augmentation
+
+transformation
+
+inspection chaining
+
+tenant-specific policy logic
+
+ZTNA doesn’t insert that.
+

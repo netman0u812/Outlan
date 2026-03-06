@@ -1,0 +1,58 @@
+Why dropping a ZTNA broker in front of your legacy applications is not the best approach:
+
+1. Structural Containment vs legacy “flat” expectations
+
+    Legacy apps often assume broad subnet reachability once “on the
+    network” (classic VPN model), while ZTNA tries to give only
+    app-level reach.​
+
+    Your Structural Containment paradigm (per-tenant routing, no shared
+    adjacency, mediation as the only bridge) makes that mismatch
+    explicit: legacy patterns depend on shared adjacency; the paradigm
+    says adjacency must be rare and engineered.
+
+2. Mediated Capability Exposure vs network-level coupling
+
+    ZTNA brokers are optimized for “capability adjacency” (proxy to a
+    specific app), but many legacy systems need broad network access,
+    odd ports, and chatty protocols that assume a trusted LAN.​
+
+    Mediated Capability Exposure directly frames this limitation: all
+    flows must cross mediation, no direct subnet exposure, tight
+    allow-lists and protocol constraints, which is exactly where legacy
+    apps break or become very hard to onboard cleanly.
+
+3. Identity-Bound Authorization vs IP / VPN trust
+
+    Legacy access models commonly equate “on the VPN / from this subnet”
+    with trust; legacy apps may not support strong identity, MFA, or
+    fine-grained roles.​
+
+    Identity-Bound Authorization explicitly rejects location-based trust
+    and requires cryptographic, tenant-scoped identity; that captures
+    why “ZTN‑ifying” old systems is hard when they can’t consume or
+    expose modern identity signals and you’re forced to bolt identity
+    checks onto proxies instead.
+
+4. Deterministic Lifecycle Governance vs lingering legacy exposure
+
+    A common ZTNA/legacy pain point is that old VPN tunnels, firewall
+    rules, and broker mappings accumulate instead of being cleanly
+    removed, especially when legacy apps are fragile and hard to touch.​
+
+    Deterministic Lifecycle Governance names this directly: lifecycle
+    asymmetry, orphaned tunnels, residual rules, and the need for
+    declarative state and deterministic teardown so those legacy paths
+    don’t quietly persist after “migration.”
+
+5. Net effect for ZTNA-to-legacy efforts
+
+    So while the documents don’t read like a ZTNA vendor whitepaper,
+    they do frame the core distinctions and limitations you hit in
+    practice: network vs capability adjacency, IP vs identity trust, and
+    one-way provisioning vs reversible lifecycle.
+
+    In other words, they give you a vocabulary and set of invariants for
+    explaining why “just put a ZTNA broker in front of it” often fails
+    for legacy apps, and what structural changes are actually needed to
+    make that bridge robust.
